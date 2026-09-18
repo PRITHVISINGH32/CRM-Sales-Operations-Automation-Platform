@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  SALES_REP
+  MARKETING
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      Role     @default(SALES_REP)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts  Contact[]
+  companies Company[]
+  deals     Deal[]
+  tasks     Task[]
+}
+
+model Contact {
+  id             String   @id @default(uuid())
+  firstName      String
+  lastName       String
+  email          String   @unique
+  phone          String?
+  companyId      String?
+  jobTitle       String?
+  industry       String?
+  country        String?
+  leadSource     String?
+  lifecycleStage String?
+  leadScore      Int      @default(0)
+  ownerId        String?
+  lastContacted  DateTime?
+  status         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company    Company?     @relation(fields: [companyId], references: [id])
+  owner      User?        @relation(fields: [ownerId], references: [id])
+  deals      Deal[]
+  activities Activity[]
+  tasks      Task[]
+  scoreLogs  LeadScore[]
+}
+
+model Company {
+  id             String   @id @default(uuid())
+  name           String
+  website        String?
+  industry       String?
+  country        String?
+  companySize    String?
+  annualRevenue  Float?
+  ownerId        String?
+  lifecycleStage String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner      User?        @relation(fields: [ownerId], references: [id])
+  contacts   Contact[]
+  deals      Deal[]
+  activities Activity[]
+  tasks      Task[]
+}
+
+model Deal {
+  id               String    @id @default(uuid())
+  name             String
+  companyId        String?
+  contactId        String?
+  value            Float
+  stage            String
+  probability      Int       @default(10)
+  expectedCloseDate DateTime?
+  ownerId          String?
+  leadSource       String?
+  lastActivityAt   DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  company    Company?    @relation(fields: [companyId], references: [id])
+  contact    Contact?    @relation(fields: [contactId], references: [id])
+  owner      User?       @relation(fields: [ownerId], references: [id])
+  activities Activity[]
+  tasks      Task[]
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  type        String   // Call, Email, Meeting, Note, Deal Stage Change, Lead Score Change, Workflow Execution
+  description String?
+  contactId   String?
+  companyId   String?
+  dealId      String?
+  createdAt   DateTime @default(now())
+
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  name        String
+  contactId   String?
+  companyId   String?
+  dealId      String?
+  ownerId     String?
+  priority    String    @default("Medium")
+  dueDate     DateTime?
+  status      String    @default("TODO") // TODO, IN PROGRESS, COMPLETED, OVERDUE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  owner   User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+}
+
+// Workflows
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  triggers   WorkflowTrigger[]
+  conditions WorkflowCondition[]
+  actions    WorkflowAction[]
+  executions WorkflowExecution[]
+}
+
+model WorkflowTrigger {
+  id         String   @id @default(uuid())
+  workflowId String
+  type       String   // Contact Created, Deal Created, Deal Stage Changed, Lead Score Changed, Task Overdue
+  config     Json?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowCondition {
+  id         String   @id @default(uuid())
+  workflowId String
+  field      String   // Lead Score, Lead Source, Deal Value, Deal Stage, Country, Owner
+  operator   String   // greater than, equals, less than
+  value      String
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowAction {
+  id         String   @id @default(uuid())
+  workflowId String
+  type       String   // Assign Owner, Create Task, Update Field, Send Notification, Send Email, Change Lifecycle Stage, Add Tag, Create Activity
+  config     Json?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowExecution {
+  id           String   @id @default(uuid())
+  workflowId   String
+  triggerEvent String
+  status       String   // SUCCESS, FAILED
+  error        String?
+  executedAt   DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+// Lead Scoring
+model LeadScoreRule {
+  id          String   @id @default(uuid())
+  name        String
+  points      Int
+  condition   Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LeadScore {
+  id        String   @id @default(uuid())
+  contactId String
+  ruleName  String
+  points    Int
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+// Process Mapping
+model ProcessMap {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps ProcessStep[]
+}
+
+model ProcessStep {
+  id            String  @id @default(uuid())
+  processMapId  String
+  name          String
+  order         Int
+  owner         String?
+  input         String?
+  process       String?
+  output        String?
+  sla           String?
+  requiredFields String?
+  automation    String?
+  risks         String?
+
+  processMap ProcessMap @relation(fields: [processMapId], references: [id], onDelete: Cascade)
+}
+
+// Implementation Center
+model ImplementationProject {
+  id          String   @id @default(uuid())
+  clientName  String
+  status      String   // Discovery, Process Mapping, CRM Configuration, Automation, Testing, Go Live
+  progress    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requirements Requirement[]
+  milestones   Milestone[]
+  risks        Risk[]
+}
+
+model Requirement {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  status    String   @default("Pending")
+  
+  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Milestone {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  dueDate   DateTime?
+  status    String   @default("Pending")
+
+  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Risk {
+  id          String   @id @default(uuid())
+  projectId   String
+  description String
+  severity    String   // High, Medium, Low
+  status      String   @default("Open")
+
+  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// Integrations
+model Integration {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "HubSpot"
+  isActive    Boolean  @default(false)
+  isDemoMode  Boolean  @default(true)
+  config      Json?
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  syncLogs SyncLog[]
+}
+
+model SyncLog {
+  id            String   @id @default(uuid())
+  integrationId String
+  entityType    String   // Contact, Company, Deal
+  status        String   // SUCCESS, FAILED
+  recordsSynced Int      @default(0)
+  error         String?
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+}
