@@ -8,299 +8,221 @@ datasource db {
 }
 
 enum Role {
+  CUSTOMER
+  ORGANISER
   ADMIN
-  MANAGER
-  SALES_REP
-  MARKETING
+}
+
+enum EventType {
+  MOVIE
+  CONCERT
+}
+
+enum ShowStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  CLAIMED
+  EXPIRED
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  role      Role     @default(SALES_REP)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  contacts  Contact[]
-  companies Company[]
-  deals     Deal[]
-  tasks     Task[]
+  id              String          @id @default(uuid())
+  name            String
+  email           String          @unique
+  passwordHash    String
+  role            Role            @default(CUSTOMER)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  events          Event[]
+  bookings        Booking[]
+  waitlistEntries WaitlistEntry[]
+  createdVenues   Venue[]
 }
 
-model Contact {
-  id             String   @id @default(uuid())
-  firstName      String
-  lastName       String
-  email          String   @unique
-  phone          String?
-  companyId      String?
-  jobTitle       String?
-  industry       String?
-  country        String?
-  leadSource     String?
-  lifecycleStage String?
-  leadScore      Int      @default(0)
-  ownerId        String?
-  lastContacted  DateTime?
-  status         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  company    Company?     @relation(fields: [companyId], references: [id])
-  owner      User?        @relation(fields: [ownerId], references: [id])
-  deals      Deal[]
-  activities Activity[]
-  tasks      Task[]
-  scoreLogs  LeadScore[]
+model Venue {
+  id            String         @id @default(uuid())
+  name          String
+  location      String
+  createdBy     String?
+  createdByUser User?          @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  categories    SeatCategory[]
+  seats         Seat[]
+  shows         Show[]
 }
 
-model Company {
-  id             String   @id @default(uuid())
-  name           String
-  website        String?
-  industry       String?
-  country        String?
-  companySize    String?
-  annualRevenue  Float?
-  ownerId        String?
-  lifecycleStage String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  owner      User?        @relation(fields: [ownerId], references: [id])
-  contacts   Contact[]
-  deals      Deal[]
-  activities Activity[]
-  tasks      Task[]
+model SeatCategory {
+  id              String              @id @default(uuid())
+  venueId         String
+  venue           Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name            String
+  seats           Seat[]
+  showPrices      ShowCategoryPrice[]
+  showSeats       ShowSeat[]
+  waitlistEntries WaitlistEntry[]
 }
 
-model Deal {
-  id               String    @id @default(uuid())
-  name             String
-  companyId        String?
-  contactId        String?
-  value            Float
-  stage            String
-  probability      Int       @default(10)
-  expectedCloseDate DateTime?
-  ownerId          String?
-  leadSource       String?
-  lastActivityAt   DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  company    Company?    @relation(fields: [companyId], references: [id])
-  contact    Contact?    @relation(fields: [contactId], references: [id])
-  owner      User?       @relation(fields: [ownerId], references: [id])
-  activities Activity[]
-  tasks      Task[]
+model Seat {
+  id         String       @id @default(uuid())
+  venueId    String
+  venue      Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   SeatCategory @relation(fields: [categoryId], references: [id])
+  rowLabel   String
+  seatNumber Int
+  position   Int          @default(0)
+  showSeats  ShowSeat[]
 }
 
-model Activity {
-  id          String   @id @default(uuid())
-  type        String   // Call, Email, Meeting, Note, Deal Stage Change, Lead Score Change, Workflow Execution
-  description String?
-  contactId   String?
-  companyId   String?
-  dealId      String?
-  createdAt   DateTime @default(now())
-
-  contact Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
-}
-
-model Task {
+model Event {
   id          String    @id @default(uuid())
-  name        String
-  contactId   String?
-  companyId   String?
-  dealId      String?
-  ownerId     String?
-  priority    String    @default("Medium")
-  dueDate     DateTime?
-  status      String    @default("TODO") // TODO, IN PROGRESS, COMPLETED, OVERDUE
+  title       String
+  description String
+  type        EventType
+  posterUrl   String?
+  organiserId String
+  organiser   User      @relation(fields: [organiserId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-
-  contact Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  owner   User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  shows       Show[]
 }
 
-// Workflows
-model Workflow {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  triggers   WorkflowTrigger[]
-  conditions WorkflowCondition[]
-  actions    WorkflowAction[]
-  executions WorkflowExecution[]
+model Show {
+  id             String              @id @default(uuid())
+  eventId        String
+  event          Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venueId        String
+  venue          Venue               @relation(fields: [venueId], references: [id])
+  startTime      DateTime
+  endTime        DateTime
+  status         ShowStatus          @default(ACTIVE)
+  createdAt      DateTime            @default(now())
+  categoryPrices ShowCategoryPrice[]
+  showSeats      ShowSeat[]
+  bookings       Booking[]
+  waitlistEntries WaitlistEntry[]
 }
 
-model WorkflowTrigger {
+model ShowCategoryPrice {
+  id         String       @id @default(uuid())
+  showId     String
+  show       Show         @relation(fields: [showId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   SeatCategory @relation(fields: [categoryId], references: [id])
+  price      Float
+
+  @@unique([showId, categoryId])
+}
+
+model ShowSeat {
+  id            String         @id @default(uuid())
+  showId        String
+  show          Show           @relation(fields: [showId], references: [id], onDelete: Cascade)
+  seatId        String
+  seat          Seat           @relation(fields: [seatId], references: [id])
+  categoryId    String
+  category      SeatCategory   @relation(fields: [categoryId], references: [id])
+  status        SeatStatus     @default(AVAILABLE)
+  holdToken     String?
+  holdExpiresAt DateTime?
+  bookingId     String?
+  booking       Booking?       @relation(fields: [bookingId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  bookingSeats  BookingSeat[]
+  waitlistOffers WaitlistOffer[]
+
+  @@unique([showId, seatId])
+  @@index([showId, status])
+  @@index([holdExpiresAt])
+}
+
+model Booking {
+  id               String        @id @default(uuid())
+  bookingReference String        @unique
+  userId           String
+  user             User          @relation(fields: [userId], references: [id])
+  showId           String
+  show             Show          @relation(fields: [showId], references: [id])
+  totalAmount      Float
+  status           BookingStatus @default(CONFIRMED)
+  paymentStatus    PaymentStatus @default(PENDING)
+  qrCodeData       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  showSeats        ShowSeat[]
+  bookingSeats     BookingSeat[]
+
+  @@index([userId])
+  @@index([showId])
+}
+
+model BookingSeat {
   id         String   @id @default(uuid())
-  workflowId String
-  type       String   // Contact Created, Deal Created, Deal Stage Changed, Lead Score Changed, Task Overdue
-  config     Json?
-
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  showSeatId String
+  showSeat   ShowSeat @relation(fields: [showSeatId], references: [id])
+  price      Float
 }
 
-model WorkflowCondition {
-  id         String   @id @default(uuid())
-  workflowId String
-  field      String   // Lead Score, Lead Source, Deal Value, Deal Stage, Country, Owner
-  operator   String   // greater than, equals, less than
-  value      String
+model WaitlistEntry {
+  id         String         @id @default(uuid())
+  showId     String
+  show       Show           @relation(fields: [showId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  categoryId String
+  category   SeatCategory   @relation(fields: [categoryId], references: [id])
+  status     WaitlistStatus @default(WAITING)
+  position   Int            @default(1)
+  createdAt  DateTime       @default(now())
+  offers     WaitlistOffer[]
 
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  @@index([showId, categoryId, status, createdAt])
 }
 
-model WorkflowAction {
-  id         String   @id @default(uuid())
-  workflowId String
-  type       String   // Assign Owner, Create Task, Update Field, Send Notification, Send Email, Change Lifecycle Stage, Add Tag, Create Activity
-  config     Json?
+model WaitlistOffer {
+  id              String        @id @default(uuid())
+  waitlistEntryId String
+  waitlistEntry   WaitlistEntry @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
+  showSeatId      String
+  showSeat        ShowSeat      @relation(fields: [showSeatId], references: [id])
+  tokenHash       String
+  expiresAt       DateTime
+  status          OfferStatus   @default(PENDING)
+  createdAt       DateTime      @default(now())
 
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-}
-
-model WorkflowExecution {
-  id           String   @id @default(uuid())
-  workflowId   String
-  triggerEvent String
-  status       String   // SUCCESS, FAILED
-  error        String?
-  executedAt   DateTime @default(now())
-
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-}
-
-// Lead Scoring
-model LeadScoreRule {
-  id          String   @id @default(uuid())
-  name        String
-  points      Int
-  condition   Json
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model LeadScore {
-  id        String   @id @default(uuid())
-  contactId String
-  ruleName  String
-  points    Int
-  createdAt DateTime @default(now())
-
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-}
-
-// Process Mapping
-model ProcessMap {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  steps ProcessStep[]
-}
-
-model ProcessStep {
-  id            String  @id @default(uuid())
-  processMapId  String
-  name          String
-  order         Int
-  owner         String?
-  input         String?
-  process       String?
-  output        String?
-  sla           String?
-  requiredFields String?
-  automation    String?
-  risks         String?
-
-  processMap ProcessMap @relation(fields: [processMapId], references: [id], onDelete: Cascade)
-}
-
-// Implementation Center
-model ImplementationProject {
-  id          String   @id @default(uuid())
-  clientName  String
-  status      String   // Discovery, Process Mapping, CRM Configuration, Automation, Testing, Go Live
-  progress    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  requirements Requirement[]
-  milestones   Milestone[]
-  risks        Risk[]
-}
-
-model Requirement {
-  id        String   @id @default(uuid())
-  projectId String
-  name      String
-  status    String   @default("Pending")
-  
-  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
-
-model Milestone {
-  id        String   @id @default(uuid())
-  projectId String
-  name      String
-  dueDate   DateTime?
-  status    String   @default("Pending")
-
-  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
-
-model Risk {
-  id          String   @id @default(uuid())
-  projectId   String
-  description String
-  severity    String   // High, Medium, Low
-  status      String   @default("Open")
-
-  project ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
-
-// Integrations
-model Integration {
-  id          String   @id @default(uuid())
-  name        String   @unique // e.g., "HubSpot"
-  isActive    Boolean  @default(false)
-  isDemoMode  Boolean  @default(true)
-  config      Json?
-  lastSyncAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  syncLogs SyncLog[]
-}
-
-model SyncLog {
-  id            String   @id @default(uuid())
-  integrationId String
-  entityType    String   // Contact, Company, Deal
-  status        String   // SUCCESS, FAILED
-  recordsSynced Int      @default(0)
-  error         String?
-  startedAt     DateTime @default(now())
-  completedAt   DateTime?
-
-  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  @@index([expiresAt, status])
 }

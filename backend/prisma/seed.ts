@@ -1,155 +1,324 @@
-// @ts-nocheck
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Clearing database...');
-  await prisma.activity.deleteMany({});
-  await prisma.task.deleteMany({});
-  await prisma.deal.deleteMany({});
-  await prisma.contact.deleteMany({});
-  await prisma.company.deleteMany({});
-  await prisma.user.deleteMany({});
+  console.log('🌱 Starting database seed for 22+ events...');
 
-  console.log('Seeding Demo Users...');
-  const adminUser = await prisma.user.create({
+  // 1. Cleanup existing data
+  await prisma.waitlistOffer.deleteMany();
+  await prisma.waitlistEntry.deleteMany();
+  await prisma.bookingSeat.deleteMany();
+  await prisma.booking.deleteMany();
+  await prisma.showSeat.deleteMany();
+  await prisma.showCategoryPrice.deleteMany();
+  await prisma.show.deleteMany();
+  await prisma.event.deleteMany();
+  await prisma.seat.deleteMany();
+  await prisma.seatCategory.deleteMany();
+  await prisma.venue.deleteMany();
+  await prisma.user.deleteMany();
+
+  // 2. Create Users
+  const passwordHash = await bcrypt.hash('password123', 10);
+
+  const customer = await prisma.user.create({
     data: {
-      email: 'admin@revopsflow.demo',
-      password: 'DemoPassword123!',
-      firstName: 'Admin',
-      lastName: 'User',
+      email: 'customer@example.com',
+      passwordHash,
+      name: 'prithvi (Customer)',
+      role: 'CUSTOMER',
+    },
+  });
+
+  const organiser = await prisma.user.create({
+    data: {
+      email: 'organiser@example.com',
+      passwordHash,
+      name: 'Event Organiser',
+      role: 'ORGANISER',
+    },
+  });
+
+  const admin = await prisma.user.create({
+    data: {
+      email: 'admin@example.com',
+      passwordHash,
+      name: 'System Admin',
       role: 'ADMIN',
-    }
+    },
   });
 
-  const salesUser = await prisma.user.create({
+  console.log('✅ Created default users');
+
+  // 3. Create Venues
+  const venueCinema = await prisma.venue.create({
     data: {
-      email: 'sales@revopsflow.demo',
-      password: 'DemoPassword123!',
-      firstName: 'Sales',
-      lastName: 'Rep',
-      role: 'SALES_REP',
-    }
+      name: 'PVR Grand IMAX Arena',
+      location: 'Lower Parel, Mumbai',
+    },
   });
 
-  console.log('Seeding Companies...');
-  const companies = [];
-  const industries = ['Technology', 'Healthcare', 'Finance', 'Manufacturing'];
-  const countries = ['USA', 'UK', 'Germany', 'France', 'Canada'];
-  const sizes = ['1-10', '11-50', '51-200', '201-500', '500+'];
-  const stages = ['Lead', 'Subscriber', 'Customer', 'Evangelist'];
+  // 4. Create Seat Categories
+  const catPremium = await prisma.seatCategory.create({
+    data: {
+      venueId: venueCinema.id,
+      name: 'VIP Recliner / Premium',
+    },
+  });
 
-  for (let i = 1; i <= 30; i++) {
-    const company = await prisma.company.create({
-      data: {
-        name: `Company ${i} Ltd.`,
-        website: `https://company${i}.example.com`,
-        industry: industries[i % industries.length],
-        country: countries[i % countries.length],
-        companySize: sizes[i % sizes.length],
-        annualRevenue: 500000 + (i * 100000),
-        ownerId: i % 2 === 0 ? adminUser.id : salesUser.id,
-        lifecycleStage: stages[i % stages.length],
-      }
-    });
-    companies.push(company);
+  const catStandard = await prisma.seatCategory.create({
+    data: {
+      venueId: venueCinema.id,
+      name: 'Standard Executive',
+    },
+  });
+
+  // 5. Create 40 Physical Seats
+  const physicalSeats = [];
+  const rows = ['A', 'B', 'C', 'D'];
+
+  for (const rowLabel of rows) {
+    const categoryId = (rowLabel === 'A' || rowLabel === 'B') ? catPremium.id : catStandard.id;
+    for (let num = 1; num <= 10; num++) {
+      const seat = await prisma.seat.create({
+        data: {
+          venueId: venueCinema.id,
+          categoryId,
+          rowLabel,
+          seatNumber: num,
+        },
+      });
+      physicalSeats.push(seat);
+    }
   }
 
-  console.log('Seeding Contacts...');
-  const contacts = [];
-  const jobTitles = ['CEO', 'CTO', 'Manager', 'Developer', 'Analyst'];
-  const leadSources = ['Organic Search', 'Direct Traffic', 'Social Media', 'Referrals'];
-  const contactStages = ['Lead', 'MQL', 'SQL', 'Opportunity', 'Customer'];
-  const contactStatuses = ['New', 'Contacted', 'Qualified', 'Unqualified'];
+  console.log('✅ Created venue & 40 physical seats');
 
-  for (let i = 1; i <= 100; i++) {
-    const company = companies[i % companies.length];
-    const contact = await prisma.contact.create({
+  // 6. Create 22 Events (Movies, Concerts, Cultural Shows)
+  const eventsData = [
+    {
+      title: 'Oppenheimer',
+      description: 'Christopher Nolan’s epic biographical thriller about J. Robert Oppenheimer and the Manhattan Project.',
+      type: 'MOVIE',
+      durationMinutes: 180,
+      posterUrl: '/images/oppenheimer.jpg',
+    },
+    {
+      title: 'The Last of Us: Live Experience',
+      description: 'A cinematic orchestral performance and screening of HBO’s masterpiece with live sound stage.',
+      type: 'MOVIE',
+      durationMinutes: 140,
+      posterUrl: '/images/last-of-us.jpg',
+    },
+    {
+      title: 'Kathakali: Sacred Dance Drama',
+      description: 'Traditional classical Indian dance-drama known for intricate face art, mudras, and heroic mythology.',
+      type: 'CONCERT',
+      durationMinutes: 120,
+      posterUrl: '/images/kathakali.png',
+    },
+    {
+      title: 'Billie Eilish: Hit Me Hard and Soft Tour',
+      description: 'Grammy & Oscar-winning global sensation performing live with full acoustic and electronic production.',
+      type: 'CONCERT',
+      durationMinutes: 150,
+      posterUrl: '/images/billie-eilish.png',
+    },
+    {
+      title: 'Hanumankind: Big Dawgs World Tour',
+      description: 'High-octane Indian hip-hop headliner performing viral hits with live brass band and visuals.',
+      type: 'CONCERT',
+      durationMinutes: 130,
+      posterUrl: '/images/hanumankind.png',
+    },
+    {
+      title: 'Coldplay: Music of the Spheres',
+      description: 'The world’s biggest eco-friendly stadium spectacle featuring kinetic floors and LED wristband lightshows.',
+      type: 'CONCERT',
+      durationMinutes: 160,
+      posterUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Dune: Part Two',
+      description: 'Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators.',
+      type: 'MOVIE',
+      durationMinutes: 166,
+      posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Avengers: Secret Wars',
+      description: 'The ultimate multiverse showdown assembling heroes across dimensions for the final multiverse war.',
+      type: 'MOVIE',
+      durationMinutes: 185,
+      posterUrl: 'https://images.unsplash.com/photo-1635805737707-575885ab0820?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Interstellar: 10th Anniversary IMAX',
+      description: 'Relive Christopher Nolan’s space exploration epic scored by Hans Zimmer in 70mm IMAX format.',
+      type: 'MOVIE',
+      durationMinutes: 169,
+      posterUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'A.R. Rahman: Live in Concert',
+      description: 'The Academy Award-winning maestro performs timeless classics with a 50-piece symphony orchestra.',
+      type: 'CONCERT',
+      durationMinutes: 180,
+      posterUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Taylor Swift: The Eras Tour',
+      description: 'A 3-hour journey through 10 iconic musical eras with stunning set changes and pyrotechnics.',
+      type: 'CONCERT',
+      durationMinutes: 195,
+      posterUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'The Dark Knight: IMAX Re-Release',
+      description: 'Heath Ledger’s legendary Oscar-winning performance as the Joker in Christopher Nolan’s Gotham.',
+      type: 'MOVIE',
+      durationMinutes: 152,
+      posterUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Sunburn Electronic Music Festival',
+      description: 'Asia’s premier EDM festival featuring world top DJs, laser displays, and beach stage production.',
+      type: 'CONCERT',
+      durationMinutes: 240,
+      posterUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Kantara: Chapter 1',
+      description: 'The ancient saga of divine judgment, forest folklore, and ancestral warrior traditions.',
+      type: 'MOVIE',
+      durationMinutes: 160,
+      posterUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Lollapalooza India 2026',
+      description: 'Multi-genre music festival bringing international indie, rock, and pop icons to Mumbai.',
+      type: 'CONCERT',
+      durationMinutes: 300,
+      posterUrl: 'https://images.unsplash.com/photo-1429962714451-bb934ecdc436?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Avatar: Fire and Ash',
+      description: 'James Cameron takes us back to Pandora to meet the Ash People in unchartered volcanic regions.',
+      type: 'MOVIE',
+      durationMinutes: 190,
+      posterUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Zakir Hussain: Tabla Beats Live',
+      description: 'Grammy-winning maestro Zakir Hussain performs improvisational Indian classical fusion.',
+      type: 'CONCERT',
+      durationMinutes: 120,
+      posterUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Spider-Man: Beyond the Spider-Verse',
+      description: 'Miles Morales navigates the multiverse in the thrilling conclusion to the Spider-Verse trilogy.',
+      type: 'MOVIE',
+      durationMinutes: 145,
+      posterUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Diljit Dosanjh: Dil-Luminati Tour',
+      description: 'Global Punjabi superstar Diljit Dosanjh performs energetic Punjabi pop and bhangra hits.',
+      type: 'CONCERT',
+      durationMinutes: 150,
+      posterUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Gladiator II',
+      description: 'Years after Maximus’ death, Lucius enters the Colosseum to restore glory to Rome.',
+      type: 'MOVIE',
+      durationMinutes: 150,
+      posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Standup Comedy Arena: All Stars',
+      description: 'Top Indian standup comedians perform 2 hours of uncensored observational hilarity.',
+      type: 'CONCERT',
+      durationMinutes: 110,
+      posterUrl: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      title: 'Inception: Live Score Edition',
+      description: 'Watch the mind-bending dream thriller with Hans Zimmer’s brass score performed live on stage.',
+      type: 'MOVIE',
+      durationMinutes: 148,
+      posterUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
+    },
+  ];
+
+  // 7. Seed Shows & Seat Inventories
+  let showCount = 0;
+  for (let i = 0; i < eventsData.length; i++) {
+    const item = eventsData[i];
+
+    const createdEvent = await prisma.event.create({
       data: {
-        firstName: `ContactFn${i}`,
-        lastName: `ContactLn${i}`,
-        email: `contact${i}@example.com`,
-        phone: `+1-555-${String(i).padStart(4, '0')}`,
-        companyId: company.id,
-        jobTitle: jobTitles[i % jobTitles.length],
-        industry: company.industry,
-        country: company.country,
-        leadSource: leadSources[i % leadSources.length],
-        lifecycleStage: contactStages[i % contactStages.length],
-        leadScore: Math.floor(Math.random() * 100),
-        ownerId: i % 2 === 0 ? adminUser.id : salesUser.id,
-        status: contactStatuses[i % contactStatuses.length],
-      }
+        title: item.title,
+        description: item.description,
+        type: item.type as any,
+        posterUrl: item.posterUrl,
+        organiserId: organiser.id,
+      },
     });
-    contacts.push(contact);
+
+    // Create 1 show per event
+    const startTime = new Date();
+    startTime.setDate(startTime.getDate() + (i % 7) + 1);
+    startTime.setHours(18 + (i % 4), 0, 0, 0);
+
+    const endTime = new Date(startTime.getTime() + item.durationMinutes * 60 * 1000);
+
+    const show = await prisma.show.create({
+      data: {
+        eventId: createdEvent.id,
+        venueId: venueCinema.id,
+        startTime,
+        endTime,
+      },
+    });
+
+    // Set Show Category Pricing
+    const isSpecial = i < 5;
+    const premiumPrice = isSpecial ? 1500 : 500;
+    const standardPrice = isSpecial ? 900 : 300;
+
+    await prisma.showCategoryPrice.createMany({
+      data: [
+        { showId: show.id, categoryId: catPremium.id, price: premiumPrice },
+        { showId: show.id, categoryId: catStandard.id, price: standardPrice },
+      ],
+    });
+
+    // Create ShowSeat records for all 40 physical seats
+    const showSeatData = physicalSeats.map((seat) => ({
+      showId: show.id,
+      seatId: seat.id,
+      categoryId: seat.categoryId,
+      status: 'AVAILABLE' as const,
+    }));
+
+    await prisma.showSeat.createMany({
+      data: showSeatData,
+    });
+
+    showCount++;
   }
 
-  console.log('Seeding Deals...');
-  const deals = [];
-  const dealStages = ['NEW LEAD', 'QUALIFIED', 'CONTACTED', 'MEETING BOOKED', 'PROPOSAL SENT', 'NEGOTIATION', 'WON', 'LOST'];
-  const probabilities = [10, 25, 35, 50, 70, 85, 100, 0];
-
-  for (let i = 1; i <= 50; i++) {
-    const stageIndex = i % dealStages.length;
-    const contact = contacts[i % contacts.length];
-    const deal = await prisma.deal.create({
-      data: {
-        name: `Deal for ${contact.companyId ? 'Company' : 'Contact'} ${i}`,
-        companyId: contact.companyId,
-        contactId: contact.id,
-        value: 10000 + (Math.random() * 90000),
-        stage: dealStages[stageIndex],
-        probability: probabilities[stageIndex],
-        expectedCloseDate: new Date(Date.now() + (Math.random() * 10000000000)),
-        ownerId: i % 2 === 0 ? adminUser.id : salesUser.id,
-        leadSource: contact.leadSource,
-      }
-    });
-    deals.push(deal);
-  }
-
-  console.log('Seeding Tasks...');
-  const priorities = ['Low', 'Medium', 'High'];
-  const taskStatuses = ['TODO', 'IN PROGRESS', 'COMPLETED', 'OVERDUE'];
-  
-  for (let i = 1; i <= 50; i++) {
-    const contact = contacts[i % contacts.length];
-    await prisma.task.create({
-      data: {
-        name: `Follow up task ${i}`,
-        contactId: contact.id,
-        companyId: contact.companyId,
-        ownerId: contact.ownerId,
-        priority: priorities[i % priorities.length],
-        status: taskStatuses[i % taskStatuses.length],
-        dueDate: new Date(Date.now() + (Math.random() * 5000000000) - 1000000000),
-      }
-    });
-  }
-
-  console.log('Seeding Activities...');
-  const activityTypes = ['Call', 'Email', 'Meeting', 'Note'];
-  
-  for (let i = 1; i <= 100; i++) {
-    const deal = deals[i % deals.length];
-    await prisma.activity.create({
-      data: {
-        type: activityTypes[i % activityTypes.length],
-        description: `Activity detail ${i}`,
-        contactId: deal.contactId,
-        companyId: deal.companyId,
-        dealId: deal.id,
-      }
-    });
-  }
-
-  console.log('Database seeded successfully.');
+  console.log(`✅ Created ${eventsData.length} events and ${showCount} shows with seat inventory!`);
+  console.log('🎉 Full database seeding completed successfully!');
 }
 
 main()
-  .catch(e => {
-    console.error(e);
+  .catch((e) => {
+    console.error('❌ Error during database seed:', e);
     process.exit(1);
   })
   .finally(async () => {
